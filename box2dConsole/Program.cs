@@ -11,7 +11,116 @@ namespace box2dTest
 {
     class Program
     {
+        const int FRAMES = 256;
+        const int PYRAMID_SIZE = 40;
+
+        b2World world;
+
         static void Main(string[] args)
+        {
+            Program p = new Program();
+            p.Warmup();
+            p.Bench();
+        }
+
+        public float Mean(List<float> values)
+        {
+            float total = 0;
+            for (int i = 0; i < FRAMES; ++i)
+            {
+                total += values[i];
+            }
+            return total / FRAMES;
+        }
+
+        // Simple nearest-rank %ile (on sorted array). We should have enough samples to make this reasonable.
+        public float Percentile(List<float> values, float pc)
+        {
+            int rank = (int)((pc * values.Count) / 100);
+            return values[rank];
+        }
+
+        public void Bench()
+        {
+            List<float> times = new List<float>();
+            for (int i = 0; i < FRAMES; ++i)
+            {
+                long begin = DateTime.Now.Ticks;
+                step();
+                long end = DateTime.Now.Ticks;
+                times.Add((float)new TimeSpan(end - begin).TotalMilliseconds);
+                log(times[i].ToString("F3"));
+            }
+
+            times.Sort();
+            float mean = Mean(times);
+            Console.WriteLine("Benchmark complete.\nms/frame: " + mean + " 5th %ile: " + Percentile(times, 5) + " 95th %ile: " + Percentile(times, 95));
+        }
+
+        void Warmup()
+        {
+            for (int i = 0; i < FRAMES; ++i)
+            {
+                step();
+            }
+        }
+
+        public Program()
+        {
+            b2Vec2 gravity = new b2Vec2(0, -10f);
+            world = new b2World(gravity);
+
+            {
+                b2BodyDef bd = new b2BodyDef();
+                b2Body ground = world.CreateBody(bd);
+
+                b2EdgeShape shape = new b2EdgeShape();
+                shape.Set(new b2Vec2(-40.0f, 0f), new b2Vec2(40.0f, 0f));
+                ground.CreateFixture(shape, 0.0f);
+            }
+
+            {
+                float a = .5f;
+                b2PolygonShape shape = new b2PolygonShape();
+                shape.SetAsBox(a, a);
+
+                b2Vec2 x = new b2Vec2(-7.0f, 0.75f);
+                b2Vec2 y = new b2Vec2();
+                b2Vec2 deltaX = new b2Vec2(0.5625f, 1f);
+                b2Vec2 deltaY = new b2Vec2(1.125f, 0.0f);
+
+                for (int i = 0; i < PYRAMID_SIZE; ++i)
+                {
+                    y = x;
+
+                    for (int j = i; j < PYRAMID_SIZE; ++j)
+                    {
+                        b2BodyDef bd = new b2BodyDef();
+                        bd.type = b2BodyType.b2_dynamicBody;
+                        bd.position = y;
+                        b2Body body = world.CreateBody(bd);
+                        body.CreateFixture(shape, 5.0f);
+                        y += deltaY;
+                    }
+
+                    x += deltaX;
+                }
+            }
+        }
+
+        void step()
+        {
+            float timeStep = 1f / 60f;
+            world.Step(timeStep, 3, 3);
+        }
+
+        void log(String msg)
+        {
+#if DEBUG
+            Console.WriteLine(msg);
+#endif
+        }
+        static void oldCode(string[] args)
         {
             var gravity = new b2Vec2(0.0f, -10.0f);
             b2World _world = new b2World(gravity);
@@ -21,7 +130,7 @@ namespace box2dTest
             // Call the body factory which allocates memory for the ground body
             // from a pool and creates the ground box shape (also from a pool).
             // The body is also added to the world.
-            b2BodyDef def = b2BodyDef.Create();
+            b2BodyDef def = new b2BodyDef();
             def.allowSleep = true;
             def.position = b2Vec2.Zero;
             def.type = b2BodyType.b2_staticBody;
@@ -33,13 +142,13 @@ namespace box2dTest
             // bottom
             b2EdgeShape groundBox = new b2EdgeShape();
             groundBox.Set(new b2Vec2(-width / 2f, 0), new b2Vec2(width / 2f, 0));
-            b2FixtureDef fd = b2FixtureDef.Create();
+            b2FixtureDef fd = new b2FixtureDef();
             fd.shape = groundBox;
             groundBody.CreateFixture(fd);
 
             // top
             groundBox = new b2EdgeShape();
-            groundBox.Set(new b2Vec2(-width/2f, height), new b2Vec2(width/2f, height));
+            groundBox.Set(new b2Vec2(-width / 2f, height), new b2Vec2(width / 2f, height));
             fd.shape = groundBox;
             groundBody.CreateFixture(fd);
 
@@ -51,7 +160,7 @@ namespace box2dTest
 
             // right
             groundBox = new b2EdgeShape();
-            groundBox.Set(new b2Vec2(width/2f, height), new b2Vec2(width/2f, 0));
+            groundBox.Set(new b2Vec2(width / 2f, height), new b2Vec2(width / 2f, 0));
             fd.shape = groundBox;
             groundBody.CreateFixture(fd);
 
@@ -74,14 +183,14 @@ namespace box2dTest
                 float xStart = (count / 30 % 2 == 1) ? 8f : 0f;
                 for (int i = 0; i < 30 && count < max; i++, count++)
                 {
-                    def = b2BodyDef.Create();
+                    def = new b2BodyDef();
                     float x = xStart + (float)i / 30.0f * ((float)width - 30.0f * 2.0f - xStart * 2.0f) + (float)i * 2.0f;
                     x += -width / 2.0f;
                     def.position = new b2Vec2(x, y + (float)(count / 30) + (float)(i + 1));
-/*                    def.position = new b2Vec2(
-                          xStart + (float)i / 30f * (width - 30*2 - xStart*2f) + (float)i * 2f
-                        , y + (float)(count / 30) + (float)(i+1));
- */
+                    /*                    def.position = new b2Vec2(
+                                              xStart + (float)i / 30f * (width - 30*2 - xStart*2f) + (float)i * 2f
+                                            , y + (float)(count / 30) + (float)(i+1));
+                     */
                     def.type = b2BodyType.b2_dynamicBody;
                     b2Body body = _world.CreateBody(def);
                     // Define another box shape for our dynamic body.
@@ -89,7 +198,7 @@ namespace box2dTest
                     dynamicBox.SetAsBox(.5f, .5f); //These are mid points for our 1m box
 
                     // Define the dynamic body fixture.
-                    fd = b2FixtureDef.Create();
+                    fd = new b2FixtureDef();
                     fd.shape = dynamicBox;
                     fd.density = 1f;
                     fd.friction = 0.3f;
@@ -99,7 +208,7 @@ namespace box2dTest
             }
             int iter = 0;
             long span = 0L;
-            float step = (float)(TimeSpan.FromTicks(333333).TotalMilliseconds)/1000f;
+            float step = (float)(TimeSpan.FromTicks(333333).TotalMilliseconds) / 1000f;
             Console.WriteLine("Cycle step = {0:F3} which is {1} fps", step, (int)(1f / step));
             int interval = 0;
 #if PROFILING
@@ -124,11 +233,11 @@ namespace box2dTest
                     //Dump(_world);
 #if DEBUG
                     TimeSpan ts = new TimeSpan(span);
-                    float fs = (float)ts.TotalMilliseconds / (float)(iter + interval*30);
+                    float fs = (float)ts.TotalMilliseconds / (float)(iter + interval * 30);
                     Console.WriteLine("{2}: iteration time is {0:F3} ms avg. and is {1:F3} cycles", fs, fs / step, interval);
 #endif
                     iter = 0;
-//                    span = 0L;
+                    //                    span = 0L;
 #if DEBUG
                     int bodyCount = _world.BodyCount;
                     int contactCount = _world.ContactManager.ContactCount;
